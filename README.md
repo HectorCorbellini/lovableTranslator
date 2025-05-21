@@ -98,6 +98,18 @@ Simply open [Lovable](https://lovable.dev/projects/825d36ee-fde2-4761-b69a-b7dac
 
 ### Deploy to Render
 
+#### Live Demo
+
+A live version of this app is deployed at: [https://lovabletranslator.onrender.com](https://lovabletranslator.onrender.com)
+
+This deployment demonstrates:
+- Client-side translation using Transformers.js
+- Custom UI with dark blue background, light green source area, and light pink translation area
+- File upload and download capabilities
+- Responsive design that works on mobile and desktop
+
+#### Deploy Your Own Instance
+
 This app can be deployed to [Render](https://render.com) as a static site:
 
 1. **Prepare for deployment**
