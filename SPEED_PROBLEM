@@ -1,0 +1,10 @@
+
+Implement parallel processing with a device-capability-aware limit
+
+Add persistent caching via IndexedDB
+
+Consider smaller/quantized models if accuracy trade-off is acceptable
+
+Add a "Fast Mode" option that uses a smaller model for speed-critical use cases
+
+These changes could potentially improve translation speed by 30-50% for multi-paragraph texts while maintaining the client-side architecture.

@@ -17,6 +17,7 @@ export const UI_STRINGS = {
     swapLanguages: "Swap Languages",
     uploadFile: "Upload .txt file",
     saveResult: "Save Result",
+    copyToClipboard: "Copy to clipboard",
   },
 
   header: {

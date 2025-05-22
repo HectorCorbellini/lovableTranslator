@@ -32,7 +32,7 @@ export function TranslatedTextArea() {
 
   return (
     <div className="relative flex flex-col">
-      <div className="relative">
+      <div>
         <Textarea
           className="min-h-36 resize-none text-base p-4 bg-pink-100 text-gray-800"
           value={isTranslating ? "Translating..." : translatedText}
@@ -42,39 +42,37 @@ export function TranslatedTextArea() {
           aria-live="polite"
           aria-readonly="true"
         />
-        {translatedText && !isTranslating && (
-          <div className="absolute top-2 right-2 flex gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0"
-              onClick={saveToFile}
-              aria-label={UI_STRINGS.button.saveResult}
-              aria-pressed={isSaved}
-            >
-              {isSaved ? (
-                <CheckIcon className="h-6 w-6 text-green-500" />
-              ) : (
-                <SaveIcon className="h-6 w-6" />
-              )}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0"
-              onClick={copyToClipboard}
-              aria-label="Copy translation to clipboard"
-              aria-pressed={isCopied}
-            >
-              {isCopied ? (
-                <CheckIcon className="h-6 w-6 text-green-500" />
-              ) : (
-                <CopyIcon className="h-6 w-6" />
-              )}
-            </Button>
-          </div>
-        )}
       </div>
+      {translatedText && !isTranslating && (
+        <div className="mt-2 flex gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={saveToFile}
+            aria-label={UI_STRINGS.button.saveResult}
+            aria-pressed={isSaved}
+          >
+            {isSaved ? (
+              <CheckIcon className="h-6 w-6 text-green-500" />
+            ) : (
+              <SaveIcon className="h-6 w-6" />
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={copyToClipboard}
+            aria-label={UI_STRINGS.button.copyToClipboard}
+            aria-pressed={isCopied}
+          >
+            {isCopied ? (
+              <CheckIcon className="h-6 w-6 text-green-500" />
+            ) : (
+              <CopyIcon className="h-6 w-6" />
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

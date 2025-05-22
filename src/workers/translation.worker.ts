@@ -19,11 +19,13 @@ const MAX_CHUNK_RETRIES = 2;
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   const { sourceText, direction } = e.data;
   try {
-    const task = "translation";
-    const model = direction === "en-to-es" ? "Xenova/opus-mt-en-es" : "Xenova/opus-mt-es-en";
+    const useQuantized = import.meta.env.VITE_USE_QUANTIZED === "true";
+    const baseModel = direction === "en-to-es" ? "Xenova/opus-mt-en-es" : "Xenova/opus-mt-es-en";
+    const quantizedModel = direction === "en-to-es" ? "Xenova/opus-mt-en-es-int8" : "Xenova/opus-mt-es-en-int8";
+    const model = useQuantized ? quantizedModel : baseModel;
 
     postMessage({ type: "progress", progress: 10, message: "Loading model..." });
-    const translator = await pipeline(task, model, {
+    const translator = await pipeline("translation", model, {
       progress_callback: (p) => {
         const scaled = Math.round(p * MODEL_PROGRESS_SCALE);
         postMessage({ type: "progress", progress: 10 + scaled, message: `Loading model: ${scaled}%` });
@@ -31,66 +33,64 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     });
 
     postMessage({ type: "progress", progress: 50, message: "Translating text..." });
-    // Split by double-newline separators, preserving them
-    const parts = sourceText.split(/(\n{2,})/g);
-    const translatedParts: string[] = [];
-    // Count chunks only in non-separator parts
-    let totalChunks = parts.reduce((acc, part) => {
-      if (!/^\n{2,}$/.test(part) && part.trim()) {
-        acc += Math.ceil(part.length / CHUNK_SIZE);
-      }
-      return acc;
-    }, 0);
-    let idx = 0;
-
-    for (const part of parts) {
-      // Preserve separators directly
-      if (/^\n{2,}$/.test(part)) {
-        translatedParts.push(part);
-        continue;
-      }
-      if (!part.trim()) { translatedParts.push(""); continue; }
+    // Split into paragraphs preserving blank lines
+    const paragraphs = sourceText.split(/\n{2,}/g);
+    const paragraphChunks = paragraphs.map(paragraph => {
+      const sentences = paragraph.match(/[^.!?]+[.!?]+/g) || [paragraph];
       const chunks: string[] = [];
-      for (let i = 0; i < part.length; i += CHUNK_SIZE) {
-        chunks.push(part.slice(i, i + CHUNK_SIZE));
-      }
-      const paraResults: string[] = [];
-      for (const chunk of chunks) {
-        // Check cache before translating
-        let translation: string;
-        if (translationCache.has(chunk)) {
-          translation = translationCache.get(chunk)!;
-        } else {
-          let attempt = 0;
-          let resultText = "";
-          while (attempt < MAX_CHUNK_RETRIES) {
-            try {
-              const res: any = await translator(chunk, { max_length: MAX_LENGTH });
-              resultText = res?.[0]?.translation_text || "";
-              // Store successful translation in cache
-              translationCache.set(chunk, resultText);
-              break;
-            } catch {
-              attempt++;
-              if (attempt === MAX_CHUNK_RETRIES) {
-                resultText = "[Error]";
-              }
-            }
-          }
-          translation = resultText;
+      let current = "";
+      for (const sentence of sentences) {
+        if ((current + sentence).length <= CHUNK_SIZE) current += sentence;
+        else {
+          if (current) chunks.push(current);
+          current = sentence;
         }
-        paraResults.push(translation);
-        idx++;
-        const prog = 50 + Math.round((idx / totalChunks) * TRANSLATION_PROGRESS_SCALE);
-        postMessage({ type: "progress", progress: prog, message: `Translated ${idx}/${totalChunks}` });
       }
-      // Append translated paragraph preserving chunk order
-      translatedParts.push(paraResults.join(''));
+      if (current) chunks.push(current);
+      return chunks;
+    });
+    const totalChunks = paragraphChunks.reduce((acc, arr) => acc + arr.length, 0);
+    let globalIndex = 0;
+    const paragraphTranslations: string[] = [];
+
+    // Helper for translating a single chunk with retry and cache
+    const translateSingle = async (text: string) => {
+      if (translationCache.has(text)) return translationCache.get(text)!;
+      let attempt = 0;
+      let result = "";
+      while (attempt < MAX_CHUNK_RETRIES) {
+        try {
+          const res: any = await translator(text, { max_length: MAX_LENGTH });
+          result = res?.[0]?.translation_text || "";
+          translationCache.set(text, result);
+          break;
+        } catch {
+          attempt++;
+          if (attempt === MAX_CHUNK_RETRIES) result = "[Error]";
+        }
+      }
+      return result;
+    };
+
+    // Translate each paragraph sequentially, with parallelism per paragraph
+    const MAX_PARALLEL = 3;
+    for (const chunks of paragraphChunks) {
+      const results: string[] = [];
+      for (let i = 0; i < chunks.length; i += MAX_PARALLEL) {
+        const batch = chunks.slice(i, i + MAX_PARALLEL);
+        const batchRes = await Promise.all(batch.map(ch => translateSingle(ch)));
+        batchRes.forEach((translation) => {
+          globalIndex++;
+          const prog = 50 + Math.round((globalIndex / totalChunks) * TRANSLATION_PROGRESS_SCALE);
+          postMessage({ type: "progress", progress: prog, message: `Translated ${globalIndex}/${totalChunks}` });
+          results.push(translation);
+        });
+      }
+      paragraphTranslations.push(results.join(''));
     }
+    const final = paragraphTranslations.join('\n\n');
 
     postMessage({ type: "progress", progress: 90, message: "Finalizing..." });
-    // Reassemble all parts including original separators
-    const final = translatedParts.join('');
     postMessage({ type: "result", result: final });
   } catch (e: any) {
     postMessage({ type: "error", error: e.message || "Unknown error" });
